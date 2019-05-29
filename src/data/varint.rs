@@ -1,34 +1,46 @@
 // Dependencies
 
-use crate::bytewise::Base;
-use crate::bytewise::Sink;
+use crate::bytewise::Load;
+use crate::bytewise::Readable;
+use crate::bytewise::Reader;
 use crate::bytewise::Size;
-use crate::bytewise::Source;
+use crate::bytewise::Writable;
+use crate::bytewise::Writer;
 
 // Structs
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Varint(pub u32);
 
 // Implementations
 
-impl Base for Varint {
-    const SIZE: Size = Size::Variable;
+impl Readable for Varint {
+    const SIZE: Size = Size::variable();
 
-    fn dump<To: Sink>(&self, to: &mut To) -> Result<(), To::Error> {
-        let Varint(value) = self;
-        assert!(*value <= 0x3fffffff);
+    fn accept<Visitor: Reader>(&self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        assert!(self.0 <= 0x3fffffff);
 
-        if *value < 128 {
-            to.push(&[*value as u8])
-        } else if *value < 16384 {
-            to.push(&[(*value >> 8) as u8 | 0x80, *value as u8])
+        if self.0 < 128 {
+            visitor.push(&[self.0 as u8])
+        } else if self.0 < 16384 {
+            visitor.push(&[(self.0 >> 8) as u8 | 0x80, self.0 as u8])
         } else {
-            to.push(&[(*value >> 24) as u8 | 0xc0, (*value >> 16) as u8, (*value >> 8) as u8, *value as u8])
+            visitor.push(&[(self.0 >> 24) as u8 | 0xc0, (self.0 >> 16) as u8, (self.0 >> 8) as u8, self.0 as u8])
         }
     }
+}
 
-    fn load<From: Source>(from: &mut From) -> Result<Self, From::Error> {
+impl Writable for Varint {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Writer>(&mut self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        *self = Self::load(visitor)?;
+        Ok(())
+    }
+}
+
+impl Load for Varint {
+    fn load<From: Writer>(from: &mut From) -> Result<Self, From::Error> {
         let alpha = from.pop(1)?[0];
 
         if alpha & 0x80 != 0 {
@@ -36,16 +48,12 @@ impl Base for Varint {
                 let more = from.pop(3)?;
                 let (beta, gamma, delta) = (more[0], more[1], more[2]);
 
-                Ok(Varint(
-                    ((alpha & 0x3f) as u32) << 24 | (beta as u32) << 16 | (gamma as u32) << 8 | (delta as u32)
-                ))
+                Ok(Varint(((alpha & 0x3f) as u32) << 24 | (beta as u32) << 16 | (gamma as u32) << 8 | (delta as u32)))
             } else {
                 let more = from.pop(1)?;
                 let beta = more[0];
 
-                Ok(Varint(
-                    ((alpha & 0x7f) as u32) << 8 | (beta as u32)
-                ))
+                Ok(Varint(((alpha & 0x7f) as u32) << 8 | (beta as u32)))
             }
         } else {
             Ok(Varint(alpha as u32))
@@ -60,42 +68,35 @@ impl Base for Varint {
 mod tests {
     use super::*;
 
-    // Enums
-
-    #[derive(Debug)]
-    enum Mismatch {
-        Content,
-        Size
-    }
-
     // Structs
 
     struct Reference(&'static [u8]);
 
+    #[derive(Debug)]
+    struct Mismatch;
+
     // Implementations
 
-    impl Sink for Reference {
+    impl Reader for Reference {
         type Error = Mismatch;
 
         fn push(&mut self, chunk: &[u8]) -> Result<(), Self::Error> {
-            let Reference(reference) = self;
-            if &reference[0..chunk.len()] == chunk {
-                *self = Reference(&reference[chunk.len()..]);
+            if &self.0[0..chunk.len()] == chunk {
+                *self = Reference(&self.0[chunk.len()..]);
                 Ok(())
-            } else { Err(Mismatch::Content) }
+            } else { Err(Mismatch) }
         }
     }
 
-    impl Source for Reference {
+    impl Writer for Reference {
         type Error = Mismatch;
 
         fn pop(&mut self, size: usize) -> Result<&[u8], Self::Error> {
-            let Reference(reference) = self;
-            if size <= reference.len() {
-                let chunk = &reference[0..size];
-                *self = Reference(&reference[size..]);
+            if size <= self.0.len() {
+                let chunk = &self.0[0..size];
+                *self = Reference(&self.0[size..]);
                 Ok(chunk)
-            } else { Err(Mismatch::Size) }
+            } else { Err(Mismatch) }
         }
     }
 
@@ -104,9 +105,11 @@ mod tests {
     macro_rules! testcase {
         ($value:expr, $reference:expr) => {
             let value = Varint($value);
-            value.dump(&mut Reference(&$reference[..])).unwrap();
+            Readable::accept(&value, &mut Reference(&$reference[..])).unwrap();
 
-            let value = Varint::load(&mut Reference(&$reference[..])).unwrap();
+            let mut value: Varint = Default::default();
+
+            Writable::accept(&mut value, &mut Reference(&$reference[..])).unwrap();
             assert_eq!(value, Varint($value));
         }
     }
@@ -125,6 +128,6 @@ mod tests {
     #[should_panic]
     fn bounds() {
         let value = Varint(0x40000000);
-        let _ = value.dump(&mut Reference(&[]));
+        let _ = Readable::accept(&value, &mut Reference(&[]));
     }
 }

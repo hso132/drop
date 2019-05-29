@@ -1,45 +1,60 @@
 // Dependencies
 
 use std::convert::TryInto;
-use super::sink::Sink;
+use super::load::Load;
+use super::readable::Readable;
+use super::reader::Reader;
 use super::size::Size;
-use super::source::Source;
-
-// Traits
-
-pub trait Base : Sized {
-    const SIZE: Size;
-    fn dump<To: Sink>(&self, to: &mut To) -> Result<(), To::Error>;
-    fn load<From: Source>(from: &mut From) -> Result<Self, From::Error>;
-}
+use super::writable::Writable;
+use super::writer::Writer;
 
 // Implementations
 
-impl Base for bool {
-    const SIZE: Size = Size::Fixed(1);
+impl Readable for bool {
+    const SIZE: Size = Size::fixed(1);
 
-    fn dump<To: Sink>(&self, to: &mut To) -> Result<(), To::Error> {
-        to.push(if *self { &[1] } else { &[0] })
+    fn accept<Visitor: Reader>(&self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        visitor.push(&[*self as u8])
     }
+}
 
-    fn load<From: Source>(from: &mut From) -> Result<Self, From::Error> {
-        let value = from.pop(1)?[0] != 0;
-        Ok(value)
+impl Writable for bool {
+    const SIZE: Size = Size::fixed(1);
+
+    fn accept<Visitor: Writer>(&mut self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        *self = Self::load(visitor)?;
+        Ok(())
+    }
+}
+
+impl Load for bool {
+    fn load<From: Writer>(from: &mut From) -> Result<Self, From::Error> {
+        Ok(from.pop(1)?[0] != 0)
     }
 }
 
 macro_rules! implement {
     ($($type:ty: $size:expr), *) => ($(
-        impl Base for $type {
-            const SIZE: Size = Size::Fixed($size);
+        impl Readable for $type {
+            const SIZE: Size = Size::fixed($size);
 
-            fn dump<To: Sink>(&self, to: &mut To) -> Result<(), To::Error> {
-                to.push(&self.to_le_bytes())
+            fn accept<Visitor: Reader>(&self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+                visitor.push(&self.to_le_bytes())
             }
+        }
 
-            fn load<From: Source>(from: &mut From) -> Result<Self, From::Error> {
-                let value = Self::from_le_bytes(from.pop($size)?.try_into().unwrap());
-                Ok(value)
+        impl Writable for $type {
+            const SIZE: Size = Size::fixed($size);
+
+            fn accept<Visitor: Writer>(&mut self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+                *self = Self::load(visitor)?;
+                Ok(())
+            }
+        }
+
+        impl Load for $type {
+            fn load<From: Writer>(from: &mut From) -> Result<Self, From::Error> {
+                Ok(Self::from_le_bytes(from.pop($size)?.try_into().unwrap()))
             }
         }
     )*);
@@ -53,36 +68,30 @@ implement!(i8: 1, i16: 2, i32: 4, i64: 8, i128: 16, u8: 1, u16: 2, u32: 4, u64: 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Enums
-
-    #[derive(Debug)]
-    enum Mismatch {
-        Content,
-        Size
-    }
+    use super::super::load::Load;
 
     // Structs
 
     struct Reference(&'static [u8]);
 
+    #[derive(Debug)]
+    struct Mismatch;
+
     // Implementations
 
-    impl Sink for Reference {
+    impl Reader for Reference {
         type Error = Mismatch;
 
         fn push(&mut self, chunk: &[u8]) -> Result<(), Self::Error> {
-            let Reference(reference) = self;
-            if *reference == chunk { Ok(()) } else { Err(Mismatch::Content) }
+            if self.0 == chunk { Ok(()) } else { Err(Mismatch) }
         }
     }
 
-    impl Source for Reference {
+    impl Writer for Reference {
         type Error = Mismatch;
 
         fn pop(&mut self, size: usize) -> Result<&[u8], Self::Error> {
-            let Reference(reference) = self;
-            if size == reference.len() { Ok(reference) } else { Err(Mismatch::Size) }
+            if size == self.0.len() { Ok(self.0) } else { Err(Mismatch) }
         }
     }
 
@@ -91,7 +100,7 @@ mod tests {
     macro_rules! testcase {
         ($type:ty, $value:expr, $reference:expr) => {
             let value: $type = $value;
-            value.dump(&mut Reference(&$reference[..])).unwrap();
+            Readable::accept(&value, &mut Reference(&$reference[..])).unwrap();
 
             let value = <$type>::load(&mut Reference(&$reference[..])).unwrap();
             assert_eq!(value, $value);
