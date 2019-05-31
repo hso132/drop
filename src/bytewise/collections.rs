@@ -3,8 +3,11 @@
 use crate::data::Varint;
 use std::cmp::Eq;
 use std::cmp::Ord;
+use std::collections::BinaryHeap;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::LinkedList;
 use std::collections::VecDeque;
 use std::hash::Hash;
@@ -16,6 +19,45 @@ use super::writable::Writable;
 use super::writer::Writer;
 
 // Implementations
+
+impl<Item: Readable> Readable for BinaryHeap<Item> {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Reader>(&self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        visitor.visit(&Varint(self.len() as u32))?;
+
+        for item in self {
+            visitor.visit(item)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<Item: Load + Ord> Writable for BinaryHeap<Item> {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Writer>(&mut self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        let size = Varint::load(visitor)?.0 as usize;
+
+        self.clear();
+        self.reserve(size);
+
+        for _ in 0..size {
+            self.push(Item::load(visitor)?);
+        }
+
+        Ok(())
+    }
+}
+
+impl<Item: Load + Ord> Load for BinaryHeap<Item> {
+    fn load<From: Writer>(from: &mut From) -> Result<Self, From::Error> {
+        let mut heap = BinaryHeap::<Item>::new();
+        from.visit(&mut heap)?;
+        Ok(heap)
+    }
+}
 
 impl<Key: Readable, Value: Readable> Readable for BTreeMap<Key, Value> {
     const SIZE: Size = Size::variable();
@@ -52,6 +94,43 @@ impl<Key: Load + Ord, Value: Load> Load for BTreeMap<Key, Value> {
         let mut map = BTreeMap::<Key, Value>::new();
         from.visit(&mut map)?;
         Ok(map)
+    }
+}
+
+impl<Item: Readable> Readable for BTreeSet<Item> {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Reader>(&self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        visitor.visit(&Varint(self.len() as u32))?;
+
+        for item in self {
+            visitor.visit(item)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<Item: Load + Ord> Writable for BTreeSet<Item> {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Writer>(&mut self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        let size = Varint::load(visitor)?.0 as usize;
+        self.clear();
+
+        for _ in 0..size {
+            self.insert(Item::load(visitor)?);
+        }
+
+        Ok(())
+    }
+}
+
+impl<Item: Load + Ord> Load for BTreeSet<Item> {
+    fn load<From: Writer>(from: &mut From) -> Result<Self, From::Error> {
+        let mut set = BTreeSet::<Item>::new();
+        from.visit(&mut set)?;
+        Ok(set)
     }
 }
 
@@ -92,6 +171,45 @@ impl<Key: Load + Eq + Hash, Value: Load> Load for HashMap<Key, Value> {
         let mut map = HashMap::<Key, Value>::new();
         from.visit(&mut map)?;
         Ok(map)
+    }
+}
+
+impl<Item: Readable> Readable for HashSet<Item> {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Reader>(&self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        visitor.visit(&Varint(self.len() as u32))?;
+
+        for item in self {
+            visitor.visit(item)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<Item: Load + Eq + Hash> Writable for HashSet<Item> {
+    const SIZE: Size = Size::variable();
+
+    fn accept<Visitor: Writer>(&mut self, visitor: &mut Visitor) -> Result<(), Visitor::Error> {
+        let size = Varint::load(visitor)?.0 as usize;
+
+        self.clear();
+        self.reserve(size);
+
+        for _ in 0..size {
+            self.insert(Item::load(visitor)?);
+        }
+
+        Ok(())
+    }
+}
+
+impl<Item: Load + Eq + Hash> Load for HashSet<Item> {
+    fn load<From: Writer>(from: &mut From) -> Result<Self, From::Error> {
+        let mut set = HashSet::<Item>::new();
+        from.visit(&mut set)?;
+        Ok(set)
     }
 }
 
