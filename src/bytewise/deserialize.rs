@@ -1,7 +1,8 @@
 // Dependencies
 
 use std::vec::Vec;
-use super::error::Error;
+use failure::Error;
+use super::errors::DeserializeError;
 use super::load::Load;
 use super::writer::Writer;
 
@@ -12,16 +13,14 @@ struct Deserializer<'s>(&'s [u8]);
 // Implementations
 
 impl Writer for Deserializer<'_> {
-    type Error = Error;
-
-    fn pop(&mut self, size: usize) -> Result<&[u8], Self::Error> {
+    fn pop(&mut self, size: usize) -> Result<&[u8], Error> {
         if self.0.len() >= size {
             let slice = &self.0[0..size];
             self.0 = &self.0[size..];
 
             Ok(slice)
         } else {
-            Err(Error::BufferTooShort)
+            Err(DeserializeError::EndOfBuffer.into())
         }
     }
 }
