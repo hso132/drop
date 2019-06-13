@@ -9,14 +9,12 @@ cache: cargo
 rust:
   - nightly
 
-before_cache: |
-  cargo install cargo-tarpaulin -f
+install: |
+  cargo install cargo-tarpaulin || :
 
 script:
-- cargo clean
-- cargo build
 - cargo test
 
 after_success: |
-  cargo tarpaulin --out Xml
+  cargo tarpaulin --all --exclude-files tests/* macros/* --out Xml
   bash <(curl -s https://codecov.io/bash)
