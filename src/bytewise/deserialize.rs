@@ -1,6 +1,5 @@
 // Dependencies
 
-use std::vec::Vec;
 use super::errors::WriteError;
 use super::errors::WriterError;
 use super::load::Load;
@@ -8,7 +7,7 @@ use super::writer::Writer;
 
 // Structs
 
-struct Deserializer<'s>(&'s [u8]);
+pub struct Deserializer<'s>(pub &'s [u8]);
 
 // Implementations
 
@@ -27,7 +26,7 @@ impl Writer for Deserializer<'_> {
 
 // Functions
 
-pub fn deserialize<Target: Load>(buffer: &Vec<u8>) -> Result<Target, WriteError> {
+pub fn deserialize<Target: Load>(buffer: &[u8]) -> Result<Target, WriteError> {
     Target::load(&mut Deserializer(&buffer[..]))
 }
 
@@ -38,9 +37,11 @@ pub fn deserialize<Target: Load>(buffer: &Vec<u8>) -> Result<Target, WriteError>
 mod tests {
     use super::*;
 
+    // Test cases
+
     #[test]
     fn reference() {
-        assert_eq!(deserialize::<[u32; 4]>(&vec![0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00]).unwrap(), [0x01, 0x02, 0x03, 0x04]);
-        deserialize::<[u32; 4]>(&vec![0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00]).unwrap_err();
+        assert_eq!(deserialize::<[u32; 4]>(&[0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00]).unwrap(), [0x01, 0x02, 0x03, 0x04]);
+        deserialize::<[u32; 4]>(&[0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00]).unwrap_err();
     }
 }
