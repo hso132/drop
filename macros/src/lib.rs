@@ -12,6 +12,7 @@ use crate::proc_macro::TokenStream;
 
 // Modules
 
+mod bytewise;
 mod error;
 mod typename;
 
@@ -22,7 +23,22 @@ pub fn error(input: TokenStream) -> TokenStream {
     error::error(input)
 }
 
+#[proc_macro_derive(Load, attributes(bytewise))]
+pub fn load(input: TokenStream) -> TokenStream {
+    bytewise::load(input)
+}
+
+#[proc_macro_derive(Readable, attributes(bytewise))]
+pub fn readable(input: TokenStream) -> TokenStream {
+    bytewise::readable(input)
+}
+
 #[proc_macro_derive(Typename)]
 pub fn typename(input: TokenStream) -> TokenStream {
     typename::typename(input)
+}
+
+#[proc_macro_derive(Writable)]
+pub fn writable(input: TokenStream) -> TokenStream {
+    bytewise::writable(input)
 }

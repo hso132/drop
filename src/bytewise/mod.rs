@@ -50,6 +50,12 @@ pub use errors::WritableError;
 pub use errors::WriteError;
 pub use errors::WriterError;
 
+// Derive macros
+
+pub use macros::Load;
+pub use macros::Readable;
+pub use macros::Writable;
+
 // Tests
 
 #[cfg(test)]
