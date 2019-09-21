@@ -24,3 +24,4 @@ pub use hash::hash;
 pub use errors::MalformedHex;
 pub use errors::ParseHexError;
 pub use errors::UnexpectedSize;
+pub use errors::HashError;
