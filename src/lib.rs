@@ -5,4 +5,6 @@ pub mod error;
 /// Pretty printing typenames for debugging
 pub mod lang;
 
+pub mod data;
+
 pub use backtrace;

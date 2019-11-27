@@ -37,8 +37,8 @@ impl Hasher {
 }
 
 /// A hash digest
-#[derive(Serialize, Deserialize, Hash, PartialOrd)]
-pub struct Digest(pub(super) [u8; SIZE]);
+#[derive(Serialize, Deserialize, Hash, PartialOrd, Clone)]
+pub struct Digest(pub(crate) [u8; SIZE]);
 
 fn do_hash<M: Serialize>(
     mut hasher: Hasher,
